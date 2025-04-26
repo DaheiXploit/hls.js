@@ -662,7 +662,6 @@ export function getSampleData(
     if (!track) {
       continue;
     }
-    let rawDuration = 0;
     let sampleCount: number | undefined;
     let firstKeyFrame: number | undefined;
     const trackTimes: TrackTimes = (tracks[id] = {
@@ -713,15 +712,12 @@ export function getSampleData(
     const timescale = track.timescale || 90e3;
     const truns = findBox(traf, ['trun']);
     let sampleDTS = trackTimes.start || 0;
+    let rawDuration = 0;
     let sampleDuration = defaultSampleDuration;
     for (let j = 0; j < truns.length; j++) {
       const trun = truns[j];
-      rawDuration = computeRawDurationFromSamples(trun);
       sampleCount = readUint32(trun, 4);
       trackTimes.sampleCount += sampleCount;
-      if (!rawDuration && defaultSampleDuration) {
-        rawDuration = defaultSampleDuration * sampleCount;
-      }
       if (track.type === ElementaryStreamTypes.VIDEO) {
         if (firstKeyFrame === undefined) {
           firstKeyFrame = -1;
@@ -756,6 +752,7 @@ export function getSampleData(
             offset += 4;
           }
           sampleDTS += sampleDuration;
+          rawDuration += sampleDuration;
           remaining--;
         }
         while (remaining--) {
@@ -782,11 +779,14 @@ export function getSampleData(
             offset += 4;
           }
           sampleDTS += sampleDuration;
+          rawDuration += sampleDuration;
         }
         trackTimes.firstKeyFrame = firstKeyFrame;
+      } else {
+        rawDuration += defaultSampleDuration * sampleCount;
       }
-      trackTimes.duration += rawDuration / timescale;
     }
+    trackTimes.duration += rawDuration / timescale;
   }
   if (!Object.keys(tracks).some((trackId) => tracks[trackId].duration)) {
     // If duration samples are not available in the traf use sidx subsegment_duration
@@ -819,65 +819,6 @@ export function getSampleData(
     }
   }
   return tracks;
-}
-
-/*
-  For Reference:
-  aligned(8) class TrackRunBox
-           extends FullBox(‘trun’, version, tr_flags) {
-     unsigned int(32)  sample_count;
-     // the following are optional fields
-     signed int(32) data_offset;
-     unsigned int(32)  first_sample_flags;
-     // all fields in the following array are optional
-     {
-        unsigned int(32)  sample_duration;
-        unsigned int(32)  sample_size;
-        unsigned int(32)  sample_flags
-        if (version == 0)
-           { unsigned int(32)
-        else
-           { signed int(32)
-     }[ sample_count ]
-  }
- */
-export function computeRawDurationFromSamples(trun: Uint8Array): number {
-  const flags = readUint32(trun, 0);
-  // Flags are at offset 0, non-optional sample_count is at offset 4. Therefore we start 8 bytes in.
-  // Each field is an int32, which is 4 bytes
-  let offset = 8;
-  // data-offset-present flag
-  if (flags & 0x000001) {
-    offset += 4;
-  }
-  // first-sample-flags-present flag
-  if (flags & 0x000004) {
-    offset += 4;
-  }
-
-  let duration = 0;
-  const sampleCount = readUint32(trun, 4);
-  for (let i = 0; i < sampleCount; i++) {
-    // sample-duration-present flag
-    if (flags & 0x000100) {
-      const sampleDuration = readUint32(trun, offset);
-      duration += sampleDuration;
-      offset += 4;
-    }
-    // sample-size-present flag
-    if (flags & 0x000200) {
-      offset += 4;
-    }
-    // sample-flags-present flag
-    if (flags & 0x000400) {
-      offset += 4;
-    }
-    // sample-composition-time-offsets-present flag
-    if (flags & 0x000800) {
-      offset += 4;
-    }
-  }
-  return duration;
 }
 
 // TODO: Remove `offsetStartDTS` in favor of using `timestampOffset` (issue #5715)
