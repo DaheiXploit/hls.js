@@ -664,12 +664,14 @@ export function getSampleData(
     }
     let sampleCount: number | undefined;
     let firstKeyFrame: number | undefined;
-    const trackTimes: TrackTimes = (tracks[id] = {
-      duration: 0,
-      sampleCount: 0,
-      timescale: track.timescale,
-      type: track.type,
-    });
+    const trackTimes: TrackTimes =
+      tracks[id] ||
+      (tracks[id] = {
+        duration: 0,
+        sampleCount: 0,
+        timescale: track.timescale,
+        type: track.type,
+      });
     // get start DTS
     const tfdt = findBox(traf, ['tfdt'])[0];
 
@@ -689,7 +691,10 @@ export function getSampleData(
           baseTime += readUint32(tfdt, 8);
         }
       }
-      if (Number.isFinite(baseTime)) {
+      if (
+        Number.isFinite(baseTime) &&
+        (trackTimes.start === undefined || baseTime < trackTimes.start)
+      ) {
         trackTimes.start = baseTime;
       }
     }
