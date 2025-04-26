@@ -192,7 +192,6 @@ class PassThroughRemuxer implements Remuxer {
     const videoSampleTimes = initData.video
       ? trackSampleData[initData.video.id]
       : null;
-    // { duration, firstKeyFrame, sampleCount, sampleStartTime }
     const videoStartTime =
       videoSampleTimes?.start !== undefined
         ? videoSampleTimes.start / videoSampleTimes.timescale
